@@ -1,0 +1,216 @@
+---
+---
+
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Debug Autenticación - Sistema de Voluntariado</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+  <div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold text-gray-800 mb-8">Debug de Autenticación</h1>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Estado del localStorage -->
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-semibold mb-4">Estado del localStorage</h2>
+        <div id="localStorage-status" class="space-y-2"></div>
+        <button onclick="checkLocalStorage()" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded">
+          Actualizar Estado
+        </button>
+      </div>
+
+      <!-- Test de API -->
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-semibold mb-4">Test de API</h2>
+        <div id="api-test-results" class="space-y-2"></div>
+        <button onclick="testAPI()" class="mt-4 bg-green-600 text-white px-4 py-2 rounded">
+          Probar API de Eventos
+        </button>
+      </div>
+
+      <!-- Login Manual -->
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-semibold mb-4">Login Manual</h2>
+        <form id="manual-login" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Email:</label>
+            <input type="email" id="email" value="test@organizacion.com" 
+                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Password:</label>
+            <input type="password" id="password" value="Test123" 
+                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
+          </div>
+          <button type="submit" class="w-full bg-purple-600 text-white px-4 py-2 rounded">
+            Login Manual
+          </button>
+        </form>
+        <div id="login-result" class="mt-4"></div>
+      </div>
+
+      <!-- Logs -->
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-semibold mb-4">Logs</h2>
+        <div id="debug-logs" class="h-64 overflow-y-auto bg-gray-100 p-3 rounded text-sm font-mono"></div>
+        <button onclick="clearLogs()" class="mt-2 bg-red-600 text-white px-4 py-2 rounded">
+          Limpiar Logs
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    let logs = [];
+
+    function log(message) {
+      const timestamp = new Date().toLocaleTimeString();
+      logs.push(`[${timestamp}] ${message}`);
+      updateLogs();
+    }
+
+    function updateLogs() {
+      const logsContainer = document.getElementById('debug-logs');
+      logsContainer.innerHTML = logs.join('\n');
+      logsContainer.scrollTop = logsContainer.scrollHeight;
+    }
+
+    function checkLocalStorage() {
+      log('🔍 Verificando localStorage...');
+      
+      const organizacionToken = localStorage.getItem('organizacionAuthToken');
+      const authToken = localStorage.getItem('authToken');
+      const organizacion = localStorage.getItem('organizacion');
+      
+      const status = document.getElementById('localStorage-status');
+      status.innerHTML = `
+        <div><strong>organizacionAuthToken:</strong> ${organizacionToken ? 'Presente' : 'Ausente'}</div>
+        <div><strong>authToken:</strong> ${authToken ? 'Presente' : 'Ausente'}</div>
+        <div><strong>organizacion:</strong> ${organizacion ? 'Presente' : 'Ausente'}</div>
+        ${organizacionToken ? `<div class="mt-2"><strong>Token:</strong> <code class="text-xs break-all">${organizacionToken}</code></div>` : ''}
+      `;
+      
+      log(`organizacionAuthToken: ${organizacionToken ? 'Presente' : 'Ausente'}`);
+      if (organizacionToken) {
+        try {
+          const payload = JSON.parse(atob(organizacionToken.split('.')[1]));
+          log(`Token payload: ${JSON.stringify(payload)}`);
+        } catch (e) {
+          log(`Error decodificando token: ${e.message}`);
+        }
+      }
+    }
+
+    async function testAPI() {
+      log('🧪 Probando API de eventos...');
+      
+      const token = localStorage.getItem('organizacionAuthToken');
+      if (!token) {
+        log('❌ No hay token disponible');
+        return;
+      }
+
+      try {
+        log('📡 Enviando petición a /api/eventos...');
+        const response = await fetch('http://localhost:3001/api/eventos', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        log(`📋 Respuesta HTTP: ${response.status} ${response.statusText}`);
+        
+        const data = await response.json();
+        log(`📦 Datos recibidos: ${JSON.stringify(data, null, 2)}`);
+
+        const results = document.getElementById('api-test-results');
+        if (response.ok) {
+          results.innerHTML = `
+            <div class="text-green-600">✅ API funciona correctamente</div>
+            <div>Status: ${response.status}</div>
+            <div>Eventos encontrados: ${data.data?.total || 0}</div>
+          `;
+        } else {
+          results.innerHTML = `
+            <div class="text-red-600">❌ Error en API</div>
+            <div>Status: ${response.status}</div>
+            <div>Mensaje: ${data.message}</div>
+          `;
+        }
+      } catch (error) {
+        log(`❌ Error en petición: ${error.message}`);
+        const results = document.getElementById('api-test-results');
+        results.innerHTML = `<div class="text-red-600">❌ Error de conexión: ${error.message}</div>`;
+      }
+    }
+
+    async function doManualLogin(email, password) {
+      log('🔐 Iniciando login manual...');
+      
+      try {
+        const response = await fetch('http://localhost:3001/api/organizacionAuth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ email, password })
+        });
+
+        log(`📋 Login response: ${response.status} ${response.statusText}`);
+        
+        const data = await response.json();
+        log(`📦 Login data: ${JSON.stringify(data, null, 2)}`);
+
+        if (data.success && data.data?.token) {
+          localStorage.setItem('organizacionAuthToken', data.data.token);
+          log('✅ Token guardado en localStorage');
+          
+          const result = document.getElementById('login-result');
+          result.innerHTML = `
+            <div class="text-green-600">✅ Login exitoso</div>
+            <div class="text-sm mt-2">Token guardado correctamente</div>
+          `;
+          
+          checkLocalStorage();
+        } else {
+          log(`❌ Login falló: ${data.message}`);
+          const result = document.getElementById('login-result');
+          result.innerHTML = `<div class="text-red-600">❌ Login falló: ${data.message}</div>`;
+        }
+      } catch (error) {
+        log(`❌ Error en login: ${error.message}`);
+        const result = document.getElementById('login-result');
+        result.innerHTML = `<div class="text-red-600">❌ Error: ${error.message}</div>`;
+      }
+    }
+
+    function clearLogs() {
+      logs = [];
+      updateLogs();
+    }
+
+    // Event handlers
+    document.getElementById('manual-login').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      doManualLogin(email, password);
+    });
+
+    // Hacer funciones globales
+    window.checkLocalStorage = checkLocalStorage;
+    window.testAPI = testAPI;
+    window.clearLogs = clearLogs;
+    window.log = log;
+
+    // Verificar estado inicial
+    checkLocalStorage();
+    log('🚀 Debug page cargada');
+  </script>
+</body>
+</html>
